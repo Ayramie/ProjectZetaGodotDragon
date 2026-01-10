@@ -1,0 +1,34 @@
+# Godot 4+ specific ignores
+.godot/
+
+# Godot-specific ignores
+*.translation
+
+# Imported textures and samples (regenerated on import)
+.import/
+
+# System/IDE files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Visual Studio / Rider
+.vs/
+*.user
+*.suo
+*.userprefs
+.idea/
+
+# Export templates and builds
+*.exe
+*.x86_64
+*.x86
+*.apk
+*.aab
+*.pck
+*.zip
+
+# Logs
+*.log
