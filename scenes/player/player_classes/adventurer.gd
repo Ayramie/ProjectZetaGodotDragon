@@ -94,7 +94,9 @@ func _melee_auto_attack() -> void:
 	target_enemy.take_damage(damage, self)
 
 	AudioManager.play_sound_3d("sword_swing", global_position)
-	# Effect:("swing", global_position + Vector3.UP, model.rotation.y)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("hit", global_position + Vector3.UP, 5)
 
 	is_attacking = true
 	await get_tree().create_timer(0.3).timeout
@@ -230,7 +232,9 @@ func _use_cleave() -> void:
 				enemy.take_damage(35, self)
 
 	AudioManager.play_sound_3d("cleave", global_position)
-	# Effect:("cleave", global_position + Vector3.UP * 0.5, model.rotation.y)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", global_position + Vector3.UP * 0.5, 15)
 
 
 func _use_whirlwind() -> void:
@@ -245,7 +249,9 @@ func _use_whirlwind() -> void:
 			enemy.take_damage(28, self)
 
 	AudioManager.play_sound_3d("whirlwind", global_position)
-	# Effect:("whirlwind", global_position + Vector3.UP, model.rotation.y)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", global_position + Vector3.UP, 20)
 
 
 func _use_parry() -> void:
@@ -253,7 +259,9 @@ func _use_parry() -> void:
 		return
 	ability_cooldowns["e"] = 5.0
 	AudioManager.play_sound_3d("parry", global_position)
-	# Effect:("parry", global_position + Vector3.UP, 0.0)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", global_position + Vector3.UP, 12)
 
 
 func _use_heroic_leap() -> void:
@@ -268,7 +276,9 @@ func _use_sunder() -> void:
 		return
 	ability_cooldowns["c"] = 5.0
 	AudioManager.play_sound_3d("sunder", global_position)
-	# Effect:("sunder", global_position, model.rotation.y)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", global_position + Vector3.UP, 15)
 
 
 # Mage abilities (simplified)
@@ -309,7 +319,9 @@ func _use_blizzard() -> void:
 	if camera:
 		target_pos = camera.get_mouse_world_position()
 	AudioManager.play_sound_3d("blizzard", target_pos)
-	# Effect:("blizzard", target_pos, 0.0)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("ice", target_pos, 25)
 
 
 func _use_frost_nova() -> void:
@@ -323,7 +335,9 @@ func _use_frost_nova() -> void:
 			enemy.take_damage(20, self)
 			enemy.apply_stun(2.0)
 	AudioManager.play_sound_3d("frost_nova", global_position)
-	# Effect:("frost_nova", global_position, 0.0)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("ice", global_position, 30)
 
 
 func _use_frozen_orb() -> void:
@@ -340,17 +354,19 @@ func _use_frozen_orb() -> void:
 			direction = to_mouse.normalized()
 			model.rotation.y = atan2(direction.x, direction.z)
 
-	EffectSpawner.spawn_projectile({
-		"type": "frozen_orb",
-		"position": global_position + Vector3.UP,
-		"direction": direction,
-		"speed": 8.0,
-		"damage": 15,
-		"tick_damage": 15,
-		"explosion_damage": 40,
-		"max_range": 25.0,
-		"source": self
-	})
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_projectile({
+			"type": "frozen_orb",
+			"position": global_position + Vector3.UP,
+			"direction": direction,
+			"speed": 8.0,
+			"damage": 15,
+			"tick_damage": 15,
+			"explosion_damage": 40,
+			"max_range": 25.0,
+			"source": self
+		})
 
 	AudioManager.play_sound_3d("spell_cast", global_position)
 
@@ -364,7 +380,9 @@ func _use_blink() -> void:
 	target_pos = GameManager.clamp_position_to_bounds(target_pos)
 	global_position = target_pos
 	AudioManager.play_sound_3d("blink", global_position)
-	# Effect:("blink", global_position, 0.0)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", global_position, 15)
 
 
 # Hunter abilities (simplified)
@@ -388,6 +406,7 @@ func _use_arrow_wave() -> void:
 	var angle_step := spread / (arrow_count - 1)
 	var start_angle := -spread / 2
 
+	var spawner := get_node_or_null("/root/EffectSpawner")
 	for i in arrow_count:
 		var angle := start_angle + angle_step * i
 		var rotated_dir := Vector3(
@@ -395,14 +414,15 @@ func _use_arrow_wave() -> void:
 			0,
 			center_direction.x * sin(angle) + center_direction.z * cos(angle)
 		)
-		EffectSpawner.spawn_projectile({
-			"type": "arrow",
-			"position": global_position + Vector3.UP,
-			"direction": rotated_dir,
-			"speed": 18.0,
-			"damage": 20,
-			"source": self
-		})
+		if spawner:
+			spawner.spawn_projectile({
+				"type": "arrow",
+				"position": global_position + Vector3.UP,
+				"direction": rotated_dir,
+				"speed": 18.0,
+				"damage": 20,
+				"source": self
+			})
 
 	AudioManager.play_sound_3d("arrow_wave", global_position)
 
@@ -424,17 +444,19 @@ func _use_spin_dash() -> void:
 	# Shoot arrows in circle
 	var arrow_count := 12
 	var angle_step := TAU / arrow_count
+	var spawner := get_node_or_null("/root/EffectSpawner")
 	for i in arrow_count:
 		var angle := angle_step * i
 		var arrow_dir := Vector3(cos(angle), 0, sin(angle))
-		EffectSpawner.spawn_projectile({
-			"type": "arrow",
-			"position": global_position + Vector3.UP,
-			"direction": arrow_dir,
-			"speed": 18.0,
-			"damage": 25,
-			"source": self
-		})
+		if spawner:
+			spawner.spawn_projectile({
+				"type": "arrow",
+				"position": global_position + Vector3.UP,
+				"direction": arrow_dir,
+				"speed": 18.0,
+				"damage": 25,
+				"source": self
+			})
 
 	# Dash
 	var dash_target := global_position + direction * 10.0
@@ -467,6 +489,7 @@ func _use_shotgun() -> void:
 	var angle_step := spread / (arrow_count - 1)
 	var start_angle := -spread / 2
 
+	var spawner := get_node_or_null("/root/EffectSpawner")
 	for i in arrow_count:
 		var angle := start_angle + angle_step * i
 		var rotated_dir := Vector3(
@@ -474,14 +497,15 @@ func _use_shotgun() -> void:
 			0,
 			center_direction.x * sin(angle) + center_direction.z * cos(angle)
 		)
-		EffectSpawner.spawn_projectile({
-			"type": "arrow",
-			"position": global_position + Vector3.UP,
-			"direction": rotated_dir,
-			"speed": 18.0,
-			"damage": 40,
-			"source": self
-		})
+		if spawner:
+			spawner.spawn_projectile({
+				"type": "arrow",
+				"position": global_position + Vector3.UP,
+				"direction": rotated_dir,
+				"speed": 18.0,
+				"damage": 40,
+				"source": self
+			})
 
 	AudioManager.play_sound_3d("bow_shoot", global_position)
 
@@ -511,14 +535,16 @@ func _use_giant_arrow() -> void:
 			direction = to_mouse.normalized()
 			model.rotation.y = atan2(direction.x, direction.z)
 
-	EffectSpawner.spawn_projectile({
-		"type": "giant_arrow",
-		"position": global_position + Vector3.UP,
-		"direction": direction,
-		"speed": 20.0,
-		"damage": 50,
-		"piercing": true,
-		"source": self
-	})
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_projectile({
+			"type": "giant_arrow",
+			"position": global_position + Vector3.UP,
+			"direction": direction,
+			"speed": 20.0,
+			"damage": 50,
+			"piercing": true,
+			"source": self
+		})
 
 	AudioManager.play_sound_3d("bow_shoot", global_position)

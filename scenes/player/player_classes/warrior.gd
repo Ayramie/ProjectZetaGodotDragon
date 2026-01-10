@@ -53,6 +53,35 @@ func _ready() -> void:
 	}
 
 
+func _setup_indicators() -> void:
+	if not indicator_manager:
+		return
+
+	# Q - Cleave: Cone indicator
+	indicator_manager.create_indicator("q", {
+		"type": AbilityIndicator.IndicatorType.CONE,
+		"radius": CLEAVE_RANGE,
+		"angle": 108.0,
+		"color_type": "damage"
+	})
+
+	# R - Heroic Leap: Range ring + target circle
+	indicator_manager.create_range_indicator("r", HEROIC_LEAP_RANGE)
+	indicator_manager.create_indicator("r", {
+		"type": AbilityIndicator.IndicatorType.CIRCLE,
+		"radius": HEROIC_LEAP_RADIUS,
+		"color_type": "damage"
+	})
+
+	# C - Sunder: Line indicator
+	indicator_manager.create_indicator("c", {
+		"type": AbilityIndicator.IndicatorType.LINE,
+		"length": SUNDER_RANGE,
+		"width": 2.0,
+		"color_type": "fire"
+	})
+
+
 func _physics_process(delta: float) -> void:
 	# Handle heroic leap movement
 	if is_leaping:
@@ -66,16 +95,36 @@ func _input(event: InputEvent) -> void:
 	if not is_alive:
 		return
 
+	# Abilities with indicators (show on press, use on release)
 	if event.is_action_pressed("ability_q"):
-		use_ability_q()
+		if ability_cooldowns["q"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("q")
+	elif event.is_action_released("ability_q"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "q":
+			indicator_manager.hide_indicator("q")
+			use_ability_q()
+
+	elif event.is_action_pressed("ability_r"):
+		if ability_cooldowns["r"] <= 0 and indicator_manager and not is_leaping:
+			indicator_manager.show_indicator("r")
+	elif event.is_action_released("ability_r"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "r":
+			indicator_manager.hide_indicator("r")
+			use_ability_r()
+
+	elif event.is_action_pressed("ability_c"):
+		if ability_cooldowns["c"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("c")
+	elif event.is_action_released("ability_c"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "c":
+			indicator_manager.hide_indicator("c")
+			use_ability_c()
+
+	# Instant abilities (no indicator)
 	elif event.is_action_pressed("ability_f"):
 		use_ability_f()
 	elif event.is_action_pressed("ability_e"):
 		use_ability_e()
-	elif event.is_action_pressed("ability_r"):
-		use_ability_r()
-	elif event.is_action_pressed("ability_c"):
-		use_ability_c()
 
 
 func use_ability_q() -> void:
@@ -116,8 +165,9 @@ func use_ability_q() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("cleave", global_position)
-	# Effect:("cleave", global_position + Vector3.UP * 0.5, model.rotation.y)
-	# Ability:("cleave", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", global_position + Vector3.UP * 0.5, 15)
 
 
 func use_ability_f() -> void:
@@ -152,8 +202,9 @@ func use_ability_f() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("whirlwind", global_position)
-	# Effect:("whirlwind", global_position + Vector3.UP, model.rotation.y)
-	# Ability:("whirlwind", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", global_position + Vector3.UP, 20)
 
 	# Animate dash
 	var tween := create_tween()
@@ -171,8 +222,9 @@ func use_ability_e() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("parry", global_position)
-	# Effect:("parry", global_position + Vector3.UP, 0.0)
-	# Ability:("parry", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", global_position + Vector3.UP, 12)
 
 	# Spin animation
 	var spin_tween := create_tween()
@@ -224,8 +276,9 @@ func use_ability_r() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("heroic_leap", global_position)
-	# Effect:("leap_trail", global_position + Vector3.UP, 0.0)
-	# Ability:("heroic_leap", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", global_position + Vector3.UP, 10)
 
 
 func _update_heroic_leap(delta: float) -> void:
@@ -248,7 +301,9 @@ func _update_heroic_leap(delta: float) -> void:
 				enemy.apply_stun(HEROIC_LEAP_STUN)
 
 		# Ground slam effect
-		# Effect:("ground_slam", global_position, 0.0)
+		var spawner := get_node_or_null("/root/EffectSpawner")
+		if spawner:
+			spawner.spawn_particles("hit", global_position, 25)
 		GameManager.add_screen_shake(0.4)
 	else:
 		# Arc movement
@@ -276,8 +331,9 @@ func use_ability_c() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("sunder", global_position)
-	# Effect:("sunder", global_position, model.rotation.y)
-	# Ability:("sunder", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", global_position + direction * 2, 15)
 
 	# Damage enemies in line
 	for enemy in GameManager.enemies:
@@ -299,7 +355,9 @@ func take_damage(amount: int, source: Node3D = null) -> void:
 	# Parry blocks damage
 	if is_parrying:
 		# Riposte effect
-		# Effect:("riposte", global_position + Vector3.UP, 0.0)
+		var spawner := get_node_or_null("/root/EffectSpawner")
+		if spawner:
+			spawner.spawn_particles("magic", global_position + Vector3.UP, 8)
 		return
 
 	super.take_damage(amount, source)

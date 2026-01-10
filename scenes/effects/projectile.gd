@@ -126,10 +126,10 @@ func _hit_enemy(enemy: Node3D) -> void:
 	if enemy.has_method("take_damage"):
 		enemy.take_damage(damage, source)
 
-	# Spawn hit effect (use get_node to avoid circular dependency)
+	# Spawn hit effect
 	var spawner := get_node_or_null("/root/EffectSpawner")
-	if spawner and spawner.has_method("spawn_particles"):
-		spawner.call("spawn_particles", "hit", global_position, 5)
+	if spawner:
+		spawner.spawn_particles("hit", global_position, 5)
 
 	hit_enemy.emit(enemy)
 
@@ -143,8 +143,8 @@ func _on_expired() -> void:
 	if projectile_type == "frozen_orb" and explosion_damage > 0:
 		_do_area_damage(explosion_damage, 4.0, true)
 		var spawner := get_node_or_null("/root/EffectSpawner")
-		if spawner and spawner.has_method("spawn_particles"):
-			spawner.call("spawn_particles", "ice", global_position, 20)
+		if spawner:
+			spawner.spawn_particles("ice", global_position, 20)
 		AudioManager.play_sound_3d("frost_nova", global_position)
 
 	expired.emit()

@@ -53,20 +53,82 @@ func _ready() -> void:
 	}
 
 
+func _setup_indicators() -> void:
+	if not indicator_manager:
+		return
+
+	# Q - Arrow Wave: Cone indicator (90° spread)
+	indicator_manager.create_indicator("q", {
+		"type": AbilityIndicator.IndicatorType.CONE,
+		"radius": 15.0,
+		"angle": 90.0,
+		"color_type": "utility"
+	})
+
+	# E - Shotgun: Cone indicator (72° spread)
+	indicator_manager.create_indicator("e", {
+		"type": AbilityIndicator.IndicatorType.CONE,
+		"radius": 10.0,
+		"angle": 72.0,
+		"color_type": "damage"
+	})
+
+	# R - Trap: Circle indicator at target location
+	indicator_manager.create_indicator("r", {
+		"type": AbilityIndicator.IndicatorType.CIRCLE,
+		"radius": TRAP_RADIUS,
+		"color_type": "utility"
+	})
+
+	# C - Giant Arrow: Line indicator
+	indicator_manager.create_indicator("c", {
+		"type": AbilityIndicator.IndicatorType.LINE,
+		"length": 30.0,
+		"width": 1.0,
+		"color_type": "damage"
+	})
+
+
 func _input(event: InputEvent) -> void:
 	if not is_alive:
 		return
 
+	# Abilities with indicators (show on press, use on release)
 	if event.is_action_pressed("ability_q"):
-		use_ability_q()
+		if ability_cooldowns["q"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("q")
+	elif event.is_action_released("ability_q"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "q":
+			indicator_manager.hide_indicator("q")
+			use_ability_q()
+
+	elif event.is_action_pressed("ability_e"):
+		if ability_cooldowns["e"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("e")
+	elif event.is_action_released("ability_e"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "e":
+			indicator_manager.hide_indicator("e")
+			use_ability_e()
+
+	elif event.is_action_pressed("ability_r"):
+		if ability_cooldowns["r"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("r")
+	elif event.is_action_released("ability_r"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "r":
+			indicator_manager.hide_indicator("r")
+			use_ability_r()
+
+	elif event.is_action_pressed("ability_c"):
+		if ability_cooldowns["c"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("c")
+	elif event.is_action_released("ability_c"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "c":
+			indicator_manager.hide_indicator("c")
+			use_ability_c()
+
+	# Instant abilities (no indicator)
 	elif event.is_action_pressed("ability_f"):
 		use_ability_f()
-	elif event.is_action_pressed("ability_e"):
-		use_ability_e()
-	elif event.is_action_pressed("ability_r"):
-		use_ability_r()
-	elif event.is_action_pressed("ability_c"):
-		use_ability_c()
 
 
 func perform_auto_attack() -> void:
@@ -138,7 +200,9 @@ func use_ability_q() -> void:
 		_spawn_arrow(global_position + Vector3.UP, rotated_dir, ARROW_WAVE_DAMAGE)
 
 	AudioManager.play_sound_3d("arrow_wave", global_position)
-	# Ability:("arrow_wave", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", global_position + Vector3.UP, 12)
 
 
 func use_ability_f() -> void:
@@ -176,7 +240,9 @@ func use_ability_f() -> void:
 	tween.tween_callback(func(): is_spin_dashing = false)
 
 	AudioManager.play_sound_3d("arrow_wave", global_position)
-	# Ability:("spin_dash", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", global_position + Vector3.UP, 20)
 
 
 func use_ability_e() -> void:
@@ -210,7 +276,9 @@ func use_ability_e() -> void:
 		_spawn_arrow(global_position + Vector3.UP, rotated_dir, SHOTGUN_DAMAGE)
 
 	AudioManager.play_sound_3d("bow_shoot", global_position)
-	# Ability:("shotgun", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", global_position + center_direction * 2 + Vector3.UP, 10)
 
 
 func use_ability_r() -> void:
@@ -233,8 +301,9 @@ func use_ability_r() -> void:
 	active_traps.append(trap)
 
 	AudioManager.play_sound_3d("trap_place", trap_pos)
-	# Effect:("trap", trap_pos, 0.0)
-	# Ability:("trap", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", trap_pos, 8)
 
 
 func _physics_process(delta: float) -> void:
@@ -282,7 +351,9 @@ func _trigger_trap(trap: Dictionary) -> void:
 			enemy.apply_stun(1.5)
 
 	AudioManager.play_sound_3d("trap_trigger", trap.position)
-	# Effect:("trap_explode", trap.position, 0.0)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", trap.position, 25)
 
 
 func use_ability_c() -> void:
@@ -306,4 +377,6 @@ func use_ability_c() -> void:
 	_spawn_arrow(global_position + Vector3.UP, direction, GIANT_ARROW_DAMAGE, true)
 
 	AudioManager.play_sound_3d("bow_shoot", global_position)
-	# Ability:("giant_arrow", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", global_position + Vector3.UP, 10)

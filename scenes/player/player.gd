@@ -58,6 +58,9 @@ var anim_controller: AnimationController = null
 # Camera reference (set externally)
 var camera: Node3D = null
 
+# Ability indicator manager
+var indicator_manager: AbilityIndicatorManager = null
+
 
 func _ready() -> void:
 	# Initialize stats from class definition
@@ -82,6 +85,12 @@ func _ready() -> void:
 		var anim_player := _find_animation_player(self)
 		if anim_player:
 			anim_controller.setup(anim_player)
+
+	# Setup ability indicator manager
+	indicator_manager = AbilityIndicatorManager.new()
+	indicator_manager.name = "IndicatorManager"
+	add_child(indicator_manager)
+	# Camera will be set later by set_camera()
 
 
 func _exit_tree() -> void:
@@ -118,6 +127,10 @@ func _physics_process(delta: float) -> void:
 
 	# Update animations based on movement
 	_update_animations()
+
+	# Update ability indicators
+	if indicator_manager:
+		indicator_manager.update_indicator_position(global_position)
 
 
 func _handle_movement(delta: float) -> void:
@@ -413,4 +426,17 @@ func use_ability_r() -> void:
 
 
 func use_ability_c() -> void:
+	pass
+
+
+func set_camera(cam: Node3D) -> void:
+	## Set camera reference for movement and ability aiming.
+	camera = cam
+	if indicator_manager:
+		indicator_manager.setup(cam)
+	_setup_indicators()
+
+
+func _setup_indicators() -> void:
+	## Virtual method for subclasses to create their ability indicators.
 	pass

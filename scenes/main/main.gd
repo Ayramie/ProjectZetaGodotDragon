@@ -192,7 +192,7 @@ func _setup_camera() -> void:
 
 	# Give player camera reference
 	if player:
-		player.camera = camera
+		player.set_camera(camera)
 
 
 func _setup_hud() -> void:

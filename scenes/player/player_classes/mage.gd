@@ -51,18 +51,79 @@ func _ready() -> void:
 	}
 
 
+func _setup_indicators() -> void:
+	if not indicator_manager:
+		return
+
+	# Q - Blizzard: Circle indicator at target location
+	indicator_manager.create_indicator("q", {
+		"type": AbilityIndicator.IndicatorType.CIRCLE,
+		"radius": BLIZZARD_RADIUS,
+		"color_type": "ice"
+	})
+
+	# F - Flame Wave: Cone indicator
+	indicator_manager.create_indicator("f", {
+		"type": AbilityIndicator.IndicatorType.CONE,
+		"radius": FLAME_WAVE_RANGE,
+		"angle": 108.0,
+		"color_type": "fire"
+	})
+
+	# E - Frost Nova: Ring around self
+	indicator_manager.create_indicator("e", {
+		"type": AbilityIndicator.IndicatorType.RING,
+		"radius": FROST_NOVA_RADIUS,
+		"color_type": "ice"
+	})
+
+	# R - Frozen Orb: Line indicator showing direction
+	indicator_manager.create_indicator("r", {
+		"type": AbilityIndicator.IndicatorType.LINE,
+		"length": FROZEN_ORB_RANGE,
+		"width": 1.5,
+		"color_type": "ice"
+	})
+
+
 func _input(event: InputEvent) -> void:
 	if not is_alive:
 		return
 
+	# Abilities with indicators (show on press, use on release)
 	if event.is_action_pressed("ability_q"):
-		use_ability_q()
+		if ability_cooldowns["q"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("q")
+	elif event.is_action_released("ability_q"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "q":
+			indicator_manager.hide_indicator("q")
+			use_ability_q()
+
 	elif event.is_action_pressed("ability_f"):
-		use_ability_f()
+		if ability_cooldowns["f"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("f")
+	elif event.is_action_released("ability_f"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "f":
+			indicator_manager.hide_indicator("f")
+			use_ability_f()
+
 	elif event.is_action_pressed("ability_e"):
-		use_ability_e()
+		if ability_cooldowns["e"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("e")
+	elif event.is_action_released("ability_e"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "e":
+			indicator_manager.hide_indicator("e")
+			use_ability_e()
+
 	elif event.is_action_pressed("ability_r"):
-		use_ability_r()
+		if ability_cooldowns["r"] <= 0 and indicator_manager:
+			indicator_manager.show_indicator("r")
+	elif event.is_action_released("ability_r"):
+		if indicator_manager and indicator_manager.get_aiming_ability() == "r":
+			indicator_manager.hide_indicator("r")
+			use_ability_r()
+
+	# Instant abilities (no indicator)
 	elif event.is_action_pressed("ability_c"):
 		use_ability_c()
 
@@ -119,8 +180,9 @@ func use_ability_q() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("blizzard", target_pos)
-	# Effect:("blizzard", target_pos, 0.0)
-	# Ability:("blizzard", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("ice", target_pos, 25)
 
 	# Start blizzard zone
 	_start_blizzard(target_pos)
@@ -152,6 +214,11 @@ func _update_blizzards(delta: float) -> void:
 		# Tick damage every 0.5 seconds
 		if blizzard.tick_timer >= 0.5:
 			blizzard.tick_timer = 0.0
+
+			# Spawn ice particles each tick
+			var spawner := get_node_or_null("/root/EffectSpawner")
+			if spawner:
+				spawner.spawn_particles("ice", blizzard.position + Vector3.UP, 8)
 
 			for enemy in GameManager.enemies:
 				if not enemy.is_alive:
@@ -202,8 +269,9 @@ func use_ability_f() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("flame_wave", global_position)
-	# Effect:("flame_wave", global_position + Vector3.UP * 0.5, model.rotation.y)
-	# Ability:("flame_wave", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("fire", global_position + direction * 3 + Vector3.UP, 20)
 
 
 func use_ability_e() -> void:
@@ -225,8 +293,9 @@ func use_ability_e() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("frost_nova", global_position)
-	# Effect:("frost_nova", global_position, 0.0)
-	# Ability:("frost_nova", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("ice", global_position, 30)
 
 
 func use_ability_r() -> void:
@@ -282,5 +351,6 @@ func use_ability_c() -> void:
 
 	# Play effects
 	AudioManager.play_sound_3d("blink", global_position)
-	# Effect:("blink", global_position, 0.0)
-	# Ability:("blink", self)
+	var spawner := get_node_or_null("/root/EffectSpawner")
+	if spawner:
+		spawner.spawn_particles("magic", global_position, 15)
