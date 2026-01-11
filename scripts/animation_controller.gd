@@ -110,15 +110,51 @@ func _ready() -> void:
 			reverse_map[our_name] = kaykit_name
 
 
-func setup(anim_player: AnimationPlayer) -> void:
+func setup(anim_player: AnimationPlayer, skeleton_root: Node = null) -> void:
 	animation_player = anim_player
 
 	if animation_player:
+		# Set root node for animation paths if skeleton root provided
+		# The animation tracks reference nodes relative to root_node
+		# For KayKit animations, tracks are like "Skeleton3D:BoneName" or "Armature/Skeleton3D:BoneName"
+		if skeleton_root:
+			# root_node should be the parent of the skeleton hierarchy
+			animation_player.root_node = animation_player.get_path_to(skeleton_root)
+
 		if not animation_player.animation_finished.is_connected(_on_animation_finished):
 			animation_player.animation_finished.connect(_on_animation_finished)
 
 		# Load animations from KayKit GLB files
 		_load_animation_libraries()
+
+
+func setup_for_model(model_node: Node3D) -> void:
+	## Sets up animation controller for a model node.
+	## Creates AnimationPlayer if needed and loads animations.
+	if not model_node:
+		push_warning("AnimationController: setup_for_model called with null model")
+		return
+
+	# First, check if the model already has an AnimationPlayer
+	animation_player = _find_animation_player(model_node)
+
+	if not animation_player:
+		# Create AnimationPlayer as direct child of model_node
+		# This ensures animation paths like "Armature/Skeleton3D:BoneName" resolve correctly
+		animation_player = AnimationPlayer.new()
+		animation_player.name = "AnimationPlayer"
+		model_node.add_child(animation_player)
+
+	# Set root_node to the model_node (parent of AnimationPlayer) so animation paths resolve correctly
+	# KayKit animation tracks use paths like "Armature/Skeleton3D:BoneName"
+	# which need to start from the GLB's root node (model_node)
+	animation_player.root_node = NodePath("..")
+
+	if not animation_player.animation_finished.is_connected(_on_animation_finished):
+		animation_player.animation_finished.connect(_on_animation_finished)
+
+	# Load animations
+	_load_animation_libraries()
 
 
 func _load_animation_libraries() -> void:
@@ -131,48 +167,64 @@ func _load_animation_libraries() -> void:
 
 	var lib := animation_player.get_animation_library("")
 
+	var anims_loaded := 0
+
 	# Load each animation pack
 	for lib_name in ANIM_LIBS:
 		var lib_path: String = ANIM_LIBS[lib_name]
 		if not ResourceLoader.exists(lib_path):
+			print("AnimController: Missing library: %s" % lib_path)
 			continue
 
 		var glb_scene: PackedScene = load(lib_path)
 		if not glb_scene:
+			print("AnimController: Failed to load: %s" % lib_path)
 			continue
 
 		var instance := glb_scene.instantiate()
 
 		# Find AnimationPlayer in the GLB scene
 		var glb_anim_player := _find_animation_player(instance)
-		if glb_anim_player:
-			# Get all animation libraries from the GLB's AnimationPlayer
-			for glb_lib_name in glb_anim_player.get_animation_library_list():
-				var glb_lib := glb_anim_player.get_animation_library(glb_lib_name)
-				if glb_lib:
-					for anim_name in glb_lib.get_animation_list():
-						var anim := glb_lib.get_animation(anim_name)
-						if anim:
-							# Map to our naming convention
-							var mapped_name := anim_name
-							if ANIMATION_MAP.has(anim_name):
-								mapped_name = ANIMATION_MAP[anim_name]
+		if not glb_anim_player:
+			print("AnimController: No AnimationPlayer in %s" % lib_name)
+			instance.queue_free()
+			continue
 
-							# Add animation if we don't have it yet
-							if not lib.has_animation(mapped_name):
-								var anim_copy: Animation = anim.duplicate()
-								# Remove root motion (position tracks on root bones)
-								_remove_root_motion(anim_copy)
-								# Set loop mode based on animation type
-								if mapped_name in LOOPING_ANIMATIONS:
-									anim_copy.loop_mode = Animation.LOOP_LINEAR
-								else:
-									anim_copy.loop_mode = Animation.LOOP_NONE
-								lib.add_animation(mapped_name, anim_copy)
+		# Get all animation libraries from the GLB's AnimationPlayer
+		var lib_list := glb_anim_player.get_animation_library_list()
+		print("AnimController: %s has libraries: %s" % [lib_name, lib_list])
+
+		for glb_lib_name in lib_list:
+			var glb_lib := glb_anim_player.get_animation_library(glb_lib_name)
+			if glb_lib:
+				for anim_name in glb_lib.get_animation_list():
+					var anim := glb_lib.get_animation(anim_name)
+					if anim:
+						# Map to our naming convention
+						var mapped_name := anim_name
+						if ANIMATION_MAP.has(anim_name):
+							mapped_name = ANIMATION_MAP[anim_name]
+
+						# Add animation if we don't have it yet
+						if not lib.has_animation(mapped_name):
+							var anim_copy: Animation = anim.duplicate()
+							# Remove root motion (position tracks on root bones)
+							_remove_root_motion(anim_copy)
+							# Set loop mode based on animation type
+							if mapped_name in LOOPING_ANIMATIONS:
+								anim_copy.loop_mode = Animation.LOOP_LINEAR
+							else:
+								anim_copy.loop_mode = Animation.LOOP_NONE
+							lib.add_animation(mapped_name, anim_copy)
+							anims_loaded += 1
 
 		instance.queue_free()
 
 	animations_loaded = true
+
+	print("AnimController: Loaded %d animations total" % anims_loaded)
+	if anims_loaded == 0:
+		push_warning("AnimationController: No animations loaded! Check animation library paths.")
 
 
 func _find_animation_player(node: Node) -> AnimationPlayer:
@@ -214,6 +266,7 @@ func _remove_root_motion(anim: Animation) -> void:
 
 func play(anim_name: String, force: bool = false) -> void:
 	if not animation_player:
+		push_warning("AnimationController.play: No animation player!")
 		return
 
 	# Don't interrupt oneshot animations unless forced
@@ -224,6 +277,17 @@ func play(anim_name: String, force: bool = false) -> void:
 		if current_animation != anim_name or force:
 			animation_player.play(anim_name)
 			current_animation = anim_name
+	else:
+		if not animations_loaded:
+			# Animations not loaded yet, try to load them
+			_load_animation_libraries()
+			if animation_player.has_animation(anim_name):
+				animation_player.play(anim_name)
+				current_animation = anim_name
+			else:
+				print("AnimController: Animation '%s' not found after loading" % anim_name)
+		else:
+			print("AnimController: Animation '%s' not found (loaded=%d)" % [anim_name, get_available_animations().size()])
 
 
 func play_oneshot(anim_name: String) -> void:

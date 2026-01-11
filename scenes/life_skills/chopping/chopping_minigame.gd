@@ -1,0 +1,327 @@
+extends Control
+class_name ChoppingMinigame
+## Chopping minigame with timing bar.
+## Identical to mining but for wood resources.
+
+signal chopping_complete(wood_count: int)
+signal chopping_cancelled()
+
+enum State { IDLE, ACTIVE, COMPLETE }
+
+# UI nodes - created programmatically
+var timing_bar: Control
+var indicator: ColorRect
+var sweet_spot: ColorRect
+var timer_label: Label
+var wood_counter: Label
+var combo_label: Label
+var feedback_label: Label
+var result_panel: PanelContainer
+var result_label: Label
+
+var state: State = State.IDLE
+var wood_type: String = "oak"
+
+# Timing bar state
+var indicator_position: float = 0.0
+var indicator_speed: float = 2.0
+var moving_right: bool = true
+
+# Sweet spot position (0-1)
+var sweet_spot_start: float = 0.4
+var sweet_spot_end: float = 0.6
+
+# Game state
+var time_remaining: float = 20.0
+var total_time: float = 20.0
+var wood_chopped: int = 0
+var current_hits: int = 0
+var hits_per_wood: int = 5
+var combo: int = 0
+var score: int = 0
+
+
+func _ready() -> void:
+	_build_ui()
+	visible = false
+	result_panel.visible = false
+
+
+func _build_ui() -> void:
+	# Full screen anchor
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	# Background panel
+	var bg := PanelContainer.new()
+	bg.set_anchors_preset(Control.PRESET_CENTER)
+	bg.custom_minimum_size = Vector2(500, 300)
+	bg.position = -bg.custom_minimum_size / 2
+	add_child(bg)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 15)
+	bg.add_child(vbox)
+
+	# Title
+	var title := Label.new()
+	title.text = "Chopping"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	vbox.add_child(title)
+
+	# Timer
+	timer_label = Label.new()
+	timer_label.text = "20.0"
+	timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	timer_label.add_theme_font_size_override("font_size", 32)
+	vbox.add_child(timer_label)
+
+	# Timing bar
+	timing_bar = Control.new()
+	timing_bar.custom_minimum_size = Vector2(400, 40)
+	vbox.add_child(timing_bar)
+
+	var bar_bg := ColorRect.new()
+	bar_bg.color = Color(0.2, 0.2, 0.2)
+	bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	timing_bar.add_child(bar_bg)
+
+	sweet_spot = ColorRect.new()
+	sweet_spot.color = Color(0.2, 0.6, 0.2)
+	sweet_spot.size = Vector2(80, 40)
+	timing_bar.add_child(sweet_spot)
+
+	indicator = ColorRect.new()
+	indicator.color = Color.WHITE
+	indicator.size = Vector2(8, 50)
+	indicator.position.y = -5
+	timing_bar.add_child(indicator)
+
+	# Stats row
+	var stats := HBoxContainer.new()
+	stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	stats.add_theme_constant_override("separation", 30)
+	vbox.add_child(stats)
+
+	wood_counter = Label.new()
+	wood_counter.text = "Wood: 0"
+	stats.add_child(wood_counter)
+
+	combo_label = Label.new()
+	combo_label.text = "Combo: 0"
+	stats.add_child(combo_label)
+
+	# Feedback
+	feedback_label = Label.new()
+	feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	feedback_label.add_theme_font_size_override("font_size", 28)
+	feedback_label.visible = false
+	vbox.add_child(feedback_label)
+
+	# Instructions
+	var instructions := Label.new()
+	instructions.text = "Press SPACE when the indicator is in the green zone!"
+	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	instructions.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(instructions)
+
+	# Result panel (separate overlay)
+	result_panel = PanelContainer.new()
+	result_panel.set_anchors_preset(Control.PRESET_CENTER)
+	result_panel.custom_minimum_size = Vector2(300, 100)
+	result_panel.position = -result_panel.custom_minimum_size / 2
+	result_panel.visible = false
+	add_child(result_panel)
+
+	result_label = Label.new()
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	result_label.add_theme_font_size_override("font_size", 24)
+	result_panel.add_child(result_label)
+
+
+func start_chopping(wood: String) -> void:
+	wood_type = wood
+	visible = true
+	state = State.ACTIVE
+	_reset_stats()
+
+	# Adjust difficulty based on wood type
+	match wood_type:
+		"oak":
+			indicator_speed = 1.5
+			sweet_spot_start = 0.35
+			sweet_spot_end = 0.65
+		"birch":
+			indicator_speed = 2.0
+			sweet_spot_start = 0.40
+			sweet_spot_end = 0.60
+		"mahogany":
+			indicator_speed = 2.5
+			sweet_spot_start = 0.42
+			sweet_spot_end = 0.58
+
+	_update_sweet_spot_visual()
+	_update_display()
+
+
+func _update_sweet_spot_visual() -> void:
+	var bar_width := timing_bar.size.x
+	sweet_spot.position.x = sweet_spot_start * bar_width
+	sweet_spot.size.x = (sweet_spot_end - sweet_spot_start) * bar_width
+
+
+func _process(delta: float) -> void:
+	if state != State.ACTIVE:
+		return
+
+	# Update timer
+	time_remaining -= delta
+	_update_timer_display()
+
+	if time_remaining <= 0:
+		_complete_chopping()
+		return
+
+	# Move indicator
+	if moving_right:
+		indicator_position += indicator_speed * delta
+		if indicator_position >= 1.0:
+			indicator_position = 1.0
+			moving_right = false
+	else:
+		indicator_position -= indicator_speed * delta
+		if indicator_position <= 0.0:
+			indicator_position = 0.0
+			moving_right = true
+
+	# Update indicator visual
+	var bar_width := timing_bar.size.x
+	indicator.position.x = indicator_position * bar_width - indicator.size.x / 2
+
+	# Check for swing input
+	if Input.is_action_just_pressed("jump"):
+		_handle_swing()
+
+
+func _handle_swing() -> void:
+	var hit_quality := _evaluate_hit()
+
+	match hit_quality:
+		"perfect":
+			combo += 1
+			current_hits += 1
+			score += 20 * combo
+			_show_feedback("Perfect!", Color.GREEN)
+			AudioManager.play_sound("mining_hit")  # Reuse mining sound
+		"great":
+			combo += 1
+			current_hits += 1
+			score += 15 * combo
+			_show_feedback("Great!", Color.CYAN)
+			AudioManager.play_sound("mining_hit")
+		"good":
+			combo += 1
+			current_hits += 1
+			score += 10 * combo
+			_show_feedback("Good!", Color.YELLOW)
+			AudioManager.play_sound("mining_hit")
+		"miss":
+			combo = 0
+			_show_feedback("Miss!", Color.RED)
+
+	# Check if wood was chopped
+	if current_hits >= hits_per_wood:
+		wood_chopped += 1
+		current_hits = 0
+		AudioManager.play_sound("mining_success")  # Reuse success sound
+
+	_update_display()
+
+
+func _evaluate_hit() -> String:
+	var sweet_center := (sweet_spot_start + sweet_spot_end) / 2
+	var sweet_width := sweet_spot_end - sweet_spot_start
+	var distance: float = abs(indicator_position - sweet_center)
+
+	if distance <= sweet_width * 0.3:
+		return "perfect"
+	elif distance <= sweet_width * 0.5:
+		return "great"
+	elif distance <= sweet_width * 0.75:
+		return "good"
+	else:
+		return "miss"
+
+
+func _show_feedback(text: String, color: Color) -> void:
+	feedback_label.text = text
+	feedback_label.modulate = color
+	feedback_label.visible = true
+
+	# Fade out
+	var tween := create_tween()
+	tween.tween_property(feedback_label, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(func(): feedback_label.visible = false; feedback_label.modulate.a = 1.0)
+
+
+func _update_display() -> void:
+	wood_counter.text = "Wood: %d" % wood_chopped
+	combo_label.text = "Combo: %d" % combo
+
+
+func _update_timer_display() -> void:
+	timer_label.text = "%.1f" % time_remaining
+
+	# Change color as time runs low
+	if time_remaining <= 5.0:
+		timer_label.modulate = Color.RED
+	elif time_remaining <= 10.0:
+		timer_label.modulate = Color.ORANGE
+	else:
+		timer_label.modulate = Color.WHITE
+
+
+func _complete_chopping() -> void:
+	state = State.COMPLETE
+
+	# Convert wood type to item ID
+	var wood_item_id := "wood_" + wood_type
+
+	# Add wood to inventory
+	for i in wood_chopped:
+		EventBus.item_picked_up.emit(wood_item_id, 1)
+
+	# Show result
+	var wood_name: String = ItemDatabase.get_item(wood_item_id).get("name", wood_type.capitalize() + " Wood")
+	result_label.text = "Chopped %d %s!" % [wood_chopped, wood_name]
+	result_panel.visible = true
+
+	chopping_complete.emit(wood_chopped)
+
+	await get_tree().create_timer(2.0).timeout
+	_end_chopping()
+
+
+func _end_chopping() -> void:
+	state = State.IDLE
+	visible = false
+	result_panel.visible = false
+
+
+func cancel() -> void:
+	if state != State.IDLE:
+		state = State.IDLE
+		visible = false
+		chopping_cancelled.emit()
+
+
+func _reset_stats() -> void:
+	indicator_position = 0.0
+	moving_right = true
+	time_remaining = total_time
+	wood_chopped = 0
+	current_hits = 0
+	combo = 0
+	score = 0
+	feedback_label.visible = false

@@ -18,6 +18,12 @@ var selected_class: PlayerClass = PlayerClass.WARRIOR
 # Player reference
 var player: Node3D = null
 
+# Inventory reference (set by main.gd)
+var inventory: RefCounted = null
+
+# Bank storage (persists across scenes, separate from inventory)
+var player_bank: BankStorage = null
+
 # Enemy tracking
 var enemies: Array[Node3D] = []
 var respawn_queue: Array[Dictionary] = []

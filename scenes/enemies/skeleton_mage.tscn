@@ -1,0 +1,39 @@
+[gd_scene load_steps=4 format=3 uid="uid://skeleton_mage"]
+
+[ext_resource type="Script" path="res://scenes/enemies/skeleton_mage.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://assets/kaykit/characters/skeletons/Skeleton_Mage.glb" id="2_model"]
+[ext_resource type="Script" path="res://scripts/animation_controller.gd" id="3_anim_controller"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_collision"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_aggro"]
+radius = 15.0
+
+[node name="SkeletonMage" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_collision")
+
+[node name="Model" type="Node3D" parent="."]
+
+[node name="SkeletonMesh" parent="Model" instance=ExtResource("2_model")]
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.5
+target_desired_distance = 8.0
+
+[node name="AggroRange" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AggroRange"]
+shape = SubResource("SphereShape3D_aggro")
+
+[node name="AnimationController" type="Node" parent="."]
+script = ExtResource("3_anim_controller")

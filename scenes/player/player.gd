@@ -80,11 +80,9 @@ func _ready() -> void:
 
 	# Setup animation controller
 	anim_controller = get_node_or_null("AnimationController") as AnimationController
-	if anim_controller:
-		# Find AnimationPlayer (might be in model hierarchy)
-		var anim_player := _find_animation_player(self)
-		if anim_player:
-			anim_controller.setup(anim_player)
+	if anim_controller and model:
+		# Use setup_for_model to properly configure AnimationPlayer
+		anim_controller.setup_for_model(model)
 
 	# Setup ability indicator manager
 	indicator_manager = AbilityIndicatorManager.new()
@@ -395,17 +393,6 @@ func _get_defense_multiplier() -> float:
 func _on_enemy_killed(enemy: Node3D, killer: Node3D) -> void:
 	if target_enemy == enemy:
 		clear_target()
-
-
-func _find_animation_player(node: Node) -> AnimationPlayer:
-	## Recursively find an AnimationPlayer in a node tree.
-	if node is AnimationPlayer:
-		return node
-	for child in node.get_children():
-		var result := _find_animation_player(child)
-		if result:
-			return result
-	return null
 
 
 # Virtual methods for subclasses to override

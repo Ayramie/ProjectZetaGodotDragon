@@ -9,16 +9,17 @@ signal fishing_cancelled()
 
 enum State { IDLE, CASTING, WAITING, BITE, QTE, REELING, COMPLETE, FAILED }
 
-@onready var qte_container: Control = $QTEContainer
-@onready var current_key_label: Label = $QTEContainer/CurrentKey
-@onready var key_queue_container: HBoxContainer = $QTEContainer/KeyQueue
-@onready var timer_bar: ProgressBar = $QTEContainer/TimerBar
-@onready var feedback_label: Label = $QTEContainer/Feedback
-@onready var fish_counter: Label = $QTEContainer/FishCounter
-@onready var combo_label: Label = $QTEContainer/ComboLabel
-@onready var score_label: Label = $QTEContainer/ScoreLabel
-@onready var result_panel: PanelContainer = $ResultPanel
-@onready var result_label: Label = $ResultPanel/ResultLabel
+# UI nodes - created programmatically
+var qte_container: Control
+var current_key_label: Label
+var key_queue_container: HBoxContainer
+var timer_bar: ProgressBar
+var feedback_label: Label
+var fish_counter: Label
+var combo_label: Label
+var score_label: Label
+var result_panel: PanelContainer
+var result_label: Label
 
 var state: State = State.IDLE
 var qte_sequence: Array[String] = []
@@ -38,9 +39,98 @@ const SEQUENCE_LENGTH := 6
 
 
 func _ready() -> void:
+	_build_ui()
 	visible = false
 	qte_container.visible = false
 	result_panel.visible = false
+
+
+func _build_ui() -> void:
+	# Full screen anchor
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	# QTE container (main game panel)
+	qte_container = PanelContainer.new()
+	qte_container.set_anchors_preset(Control.PRESET_CENTER)
+	qte_container.custom_minimum_size = Vector2(500, 350)
+	qte_container.position = -qte_container.custom_minimum_size / 2
+	add_child(qte_container)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 15)
+	qte_container.add_child(vbox)
+
+	# Title
+	var title := Label.new()
+	title.text = "Fishing"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	vbox.add_child(title)
+
+	# Timer bar
+	timer_bar = ProgressBar.new()
+	timer_bar.custom_minimum_size = Vector2(400, 25)
+	timer_bar.max_value = 100.0
+	timer_bar.value = 100.0
+	vbox.add_child(timer_bar)
+
+	# Current key display
+	current_key_label = Label.new()
+	current_key_label.text = "W"
+	current_key_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	current_key_label.add_theme_font_size_override("font_size", 64)
+	vbox.add_child(current_key_label)
+
+	# Key queue
+	key_queue_container = HBoxContainer.new()
+	key_queue_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	key_queue_container.add_theme_constant_override("separation", 10)
+	vbox.add_child(key_queue_container)
+
+	# Feedback label
+	feedback_label = Label.new()
+	feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	feedback_label.add_theme_font_size_override("font_size", 28)
+	vbox.add_child(feedback_label)
+
+	# Stats row
+	var stats := HBoxContainer.new()
+	stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	stats.add_theme_constant_override("separation", 30)
+	vbox.add_child(stats)
+
+	fish_counter = Label.new()
+	fish_counter.text = "Fish: 0"
+	stats.add_child(fish_counter)
+
+	combo_label = Label.new()
+	combo_label.text = "Combo: 0"
+	stats.add_child(combo_label)
+
+	score_label = Label.new()
+	score_label.text = "Score: 0"
+	stats.add_child(score_label)
+
+	# Instructions
+	var instructions := Label.new()
+	instructions.text = "Press W/A/S/D to match the keys!"
+	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	instructions.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(instructions)
+
+	# Result panel (separate overlay)
+	result_panel = PanelContainer.new()
+	result_panel.set_anchors_preset(Control.PRESET_CENTER)
+	result_panel.custom_minimum_size = Vector2(350, 100)
+	result_panel.position = -result_panel.custom_minimum_size / 2
+	result_panel.visible = false
+	add_child(result_panel)
+
+	result_label = Label.new()
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	result_label.add_theme_font_size_override("font_size", 22)
+	result_panel.add_child(result_label)
 
 
 func start_fishing() -> void:

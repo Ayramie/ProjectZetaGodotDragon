@@ -8,15 +8,16 @@ signal mining_cancelled()
 
 enum State { IDLE, ACTIVE, COMPLETE }
 
-@onready var timing_bar: Control = $TimingBar
-@onready var indicator: ColorRect = $TimingBar/Indicator
-@onready var sweet_spot: ColorRect = $TimingBar/SweetSpot
-@onready var timer_label: Label = $TimerLabel
-@onready var ore_counter: Label = $OreCounter
-@onready var combo_label: Label = $ComboLabel
-@onready var feedback_label: Label = $Feedback
-@onready var result_panel: PanelContainer = $ResultPanel
-@onready var result_label: Label = $ResultPanel/ResultLabel
+# UI nodes - created programmatically
+var timing_bar: Control
+var indicator: ColorRect
+var sweet_spot: ColorRect
+var timer_label: Label
+var ore_counter: Label
+var combo_label: Label
+var feedback_label: Label
+var result_panel: PanelContainer
+var result_label: Label
 
 var state: State = State.IDLE
 var ore_type: String = "copper"
@@ -41,8 +42,102 @@ var score: int = 0
 
 
 func _ready() -> void:
+	_build_ui()
 	visible = false
 	result_panel.visible = false
+
+
+func _build_ui() -> void:
+	# Full screen anchor
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	# Background panel
+	var bg := PanelContainer.new()
+	bg.set_anchors_preset(Control.PRESET_CENTER)
+	bg.custom_minimum_size = Vector2(500, 300)
+	bg.position = -bg.custom_minimum_size / 2
+	add_child(bg)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 15)
+	bg.add_child(vbox)
+
+	# Title
+	var title := Label.new()
+	title.text = "Mining"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	vbox.add_child(title)
+
+	# Timer
+	timer_label = Label.new()
+	timer_label.text = "20.0"
+	timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	timer_label.add_theme_font_size_override("font_size", 32)
+	vbox.add_child(timer_label)
+
+	# Timing bar
+	timing_bar = Control.new()
+	timing_bar.custom_minimum_size = Vector2(400, 40)
+	vbox.add_child(timing_bar)
+
+	var bar_bg := ColorRect.new()
+	bar_bg.color = Color(0.2, 0.2, 0.2)
+	bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	timing_bar.add_child(bar_bg)
+
+	sweet_spot = ColorRect.new()
+	sweet_spot.color = Color(0.2, 0.6, 0.2)
+	sweet_spot.size = Vector2(80, 40)
+	timing_bar.add_child(sweet_spot)
+
+	indicator = ColorRect.new()
+	indicator.color = Color.WHITE
+	indicator.size = Vector2(8, 50)
+	indicator.position.y = -5
+	timing_bar.add_child(indicator)
+
+	# Stats row
+	var stats := HBoxContainer.new()
+	stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	stats.add_theme_constant_override("separation", 30)
+	vbox.add_child(stats)
+
+	ore_counter = Label.new()
+	ore_counter.text = "Ore: 0"
+	stats.add_child(ore_counter)
+
+	combo_label = Label.new()
+	combo_label.text = "Combo: 0"
+	stats.add_child(combo_label)
+
+	# Feedback
+	feedback_label = Label.new()
+	feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	feedback_label.add_theme_font_size_override("font_size", 28)
+	feedback_label.visible = false
+	vbox.add_child(feedback_label)
+
+	# Instructions
+	var instructions := Label.new()
+	instructions.text = "Press SPACE when the indicator is in the green zone!"
+	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	instructions.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(instructions)
+
+	# Result panel (separate overlay)
+	result_panel = PanelContainer.new()
+	result_panel.set_anchors_preset(Control.PRESET_CENTER)
+	result_panel.custom_minimum_size = Vector2(300, 100)
+	result_panel.position = -result_panel.custom_minimum_size / 2
+	result_panel.visible = false
+	add_child(result_panel)
+
+	result_label = Label.new()
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	result_label.add_theme_font_size_override("font_size", 24)
+	result_panel.add_child(result_label)
 
 
 func start_mining(ore: String) -> void:
@@ -147,7 +242,7 @@ func _handle_swing() -> void:
 func _evaluate_hit() -> String:
 	var sweet_center := (sweet_spot_start + sweet_spot_end) / 2
 	var sweet_width := sweet_spot_end - sweet_spot_start
-	var distance := abs(indicator_position - sweet_center)
+	var distance: float = abs(indicator_position - sweet_center)
 
 	if distance <= sweet_width * 0.3:
 		return "perfect"

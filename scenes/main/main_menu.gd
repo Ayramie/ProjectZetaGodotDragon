@@ -10,6 +10,7 @@ extends Control
 @onready var horde_btn: Button = $VBoxContainer/ModeButtons/HordeBtn
 
 @onready var start_btn: Button = $VBoxContainer/StartBtn
+@onready var continue_btn: Button = $VBoxContainer/ContinueBtn if has_node("VBoxContainer/ContinueBtn") else null
 
 var selected_class: GameManager.PlayerClass = GameManager.PlayerClass.WARRIOR
 var selected_mode: GameManager.GameMode = GameManager.GameMode.ADVENTURE
@@ -32,9 +33,32 @@ func _ready() -> void:
 	# Connect start button
 	start_btn.pressed.connect(_on_start_pressed)
 
+	# Setup continue button if it exists (or create one)
+	_setup_continue_button()
+
 	# Set initial selection visuals
 	_update_class_buttons()
 	_update_mode_buttons()
+
+
+func _setup_continue_button() -> void:
+	# Create continue button if it doesn't exist
+	if not continue_btn:
+		continue_btn = Button.new()
+		continue_btn.name = "ContinueBtn"
+		continue_btn.text = "Continue"
+		continue_btn.custom_minimum_size = Vector2(200, 50)
+
+		# Insert before start button
+		var vbox := $VBoxContainer
+		var start_index := start_btn.get_index()
+		vbox.add_child(continue_btn)
+		vbox.move_child(continue_btn, start_index)
+
+	continue_btn.pressed.connect(_on_continue_pressed)
+
+	# Only show if save exists
+	continue_btn.visible = SaveManager.has_save_file()
 
 
 func _on_class_selected(player_class: GameManager.PlayerClass) -> void:
@@ -56,8 +80,19 @@ func _on_start_pressed() -> void:
 	GameManager.set_player_class(selected_class)
 	GameManager.set_game_mode(selected_mode)
 
-	# Start the game
-	get_tree().change_scene_to_file("res://scenes/main/main.tscn")
+	# Start the game - go to town hub
+	get_tree().change_scene_to_file("res://scenes/main/town.tscn")
+
+
+func _on_continue_pressed() -> void:
+	AudioManager.play_sound("button_click")
+
+	# Load save file
+	if SaveManager.load_game():
+		# Save data is loaded, start in town hub
+		get_tree().change_scene_to_file("res://scenes/main/town.tscn")
+	else:
+		EventBus.show_message.emit("Failed to load save file", Color.RED, 2.0)
 
 
 func _update_class_buttons() -> void:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3 uid="uid://main_scene"]
+[gd_scene load_steps=8 format=3 uid="uid://main_scene"]
 
 [ext_resource type="Script" path="res://scenes/main/main.gd" id="1_main"]
 
@@ -32,6 +32,14 @@ size = Vector3(200, 0.1, 200)
 [sub_resource type="BoxMesh" id="BoxMesh_ground"]
 size = Vector3(200, 0.1, 200)
 
+[sub_resource type="NavigationMesh" id="NavigationMesh_main"]
+vertices = PackedVector3Array(-100, 0, -100, -100, 0, 100, 100, 0, 100, 100, 0, -100)
+polygons = [PackedInt32Array(0, 1, 2, 3)]
+agent_radius = 0.5
+agent_height = 2.0
+agent_max_climb = 0.5
+agent_max_slope = 45.0
+
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
@@ -43,6 +51,9 @@ transform = Transform3D(0.866, -0.433, 0.25, 0, 0.5, 0.866, -0.5, -0.75, 0.433, 
 light_color = Color(1, 0.98, 0.9, 1)
 light_energy = 1.2
 shadow_enabled = true
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("NavigationMesh_main")
 
 [node name="World" type="Node3D" parent="."]
 

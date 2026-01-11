@@ -66,11 +66,9 @@ func _ready() -> void:
 
 	# Setup animation controller
 	anim_controller = get_node_or_null("AnimationController") as AnimationController
-	if anim_controller:
-		# Find AnimationPlayer (might be in model hierarchy)
-		var anim_player := _find_animation_player(self)
-		if anim_player:
-			anim_controller.setup(anim_player)
+	if anim_controller and model:
+		# Use the new setup_for_model that handles AnimationPlayer creation
+		anim_controller.setup_for_model(model)
 
 
 func _exit_tree() -> void:
@@ -284,12 +282,52 @@ func die(killer: Node3D = null) -> void:
 
 
 func _drop_loot() -> void:
-	# Override in subclasses for specific loot tables
-	var drop_chance := randf()
-	if drop_chance < 0.3:
-		pass  # ItemDrop:("bone_fragment", 1, global_position)
-	if drop_chance < 0.1:
-		pass  # ItemDrop:("health_potion_small", 1, global_position)
+	## Override in subclasses for specific loot tables.
+	## Base implementation drops common loot.
+	var loot_table := [
+		{"item_id": "bone_fragment", "chance": 0.2, "min": 1, "max": 1},
+		{"item_id": "gold", "chance": 0.5, "min": 3, "max": 10},
+	]
+	_process_loot_table(loot_table)
+
+
+func _process_loot_table(loot_table: Array) -> void:
+	## Processes a loot table and drops items based on chance.
+	for entry in loot_table:
+		if randf() <= entry.chance:
+			var amount := randi_range(entry.min, entry.max)
+			if entry.item_id == "gold":
+				_give_gold(amount)
+			else:
+				_give_item(entry.item_id, amount)
+
+
+func _give_gold(amount: int) -> void:
+	## Adds gold to player inventory and shows floating text.
+	if GameManager.inventory:
+		GameManager.inventory.add_gold(amount)
+
+		# Show floating gold number
+		var spawner := get_node_or_null("/root/EffectSpawner")
+		if spawner:
+			spawner.spawn_damage_number(global_position + Vector3.UP * 1.5, amount, false, false)
+
+		EventBus.show_message.emit("+" + str(amount) + " Gold", Color(1.0, 0.85, 0.3), 2.0)
+
+
+func _give_item(item_id: String, amount: int) -> void:
+	## Adds item to player inventory and shows notification.
+	if GameManager.inventory:
+		var overflow: int = GameManager.inventory.add_item(item_id, amount)
+		var added: int = amount - overflow
+
+		if added > 0:
+			# Get item name for display
+			var item_def: Dictionary = ItemDatabase.get_item(item_id)
+			var item_name: String = item_def.get("name", item_id.replace("_", " ").capitalize())
+
+			EventBus.show_message.emit("+" + str(added) + " " + item_name, Color.WHITE, 2.0)
+			EventBus.item_picked_up.emit(item_id, added)
 
 
 func apply_stun(duration: float) -> void:
@@ -312,14 +350,3 @@ func _on_aggro_body_entered(body: Node3D) -> void:
 	if body is Player:
 		is_aggro = true
 		target = body
-
-
-func _find_animation_player(node: Node) -> AnimationPlayer:
-	## Recursively find an AnimationPlayer in a node tree.
-	if node is AnimationPlayer:
-		return node
-	for child in node.get_children():
-		var result := _find_animation_player(child)
-		if result:
-			return result
-	return null

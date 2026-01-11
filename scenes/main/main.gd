@@ -12,6 +12,18 @@ var player_inventory: Inventory = null
 var hud: HUD = null
 var inventory_ui: InventoryUI = null
 
+# Life skill UIs
+var fishing_minigame: FishingMinigame = null
+var mining_minigame: MiningMinigame = null
+var chopping_minigame: ChoppingMinigame = null
+var cooking_ui: CookingUI = null
+var smelting_ui: SmeltingUI = null
+var anvil_ui: AnvilUI = null
+var crafting_ui: CraftingUI = null
+
+# Life skill stations
+var life_skill_stations: Array[Node3D] = []
+
 # Scene paths (loaded at runtime since .tscn files may not exist yet)
 var player_scene_path: String = "res://scenes/player/player.tscn"
 var camera_scene_path: String = "res://scenes/camera/third_person_camera.tscn"
@@ -23,10 +35,9 @@ func _ready() -> void:
 	# Connect to game manager signals
 	GameManager.game_state_changed.connect(_on_game_state_changed)
 
-	# If we're starting directly in this scene, start the game
-	if GameManager.current_state == GameManager.GameState.MENU:
-		# For testing, start immediately
-		_start_game()
+	# Always start the game when this scene loads
+	# This handles both direct loading and portal transitions from town
+	_start_game()
 
 
 func _start_game() -> void:
@@ -44,10 +55,24 @@ func _start_game() -> void:
 	# Spawn initial enemies (for testing)
 	_spawn_test_enemies()
 
+	# Setup life skill systems
+	_setup_life_skill_uis()
+	_spawn_life_skill_stations()
+
 	EventBus.game_started.emit()
 
 
 func _spawn_player() -> void:
+	# Determine spawn position from spawn point or default
+	var spawn_pos := Vector3(0, 0.5, 0)
+	var spawn_name := SaveManager.get_spawn_point()
+	if not spawn_name.is_empty():
+		var spawn_points := get_node_or_null("World/SpawnPoints")
+		if spawn_points:
+			var spawn_marker := spawn_points.get_node_or_null(spawn_name)
+			if spawn_marker:
+				spawn_pos = spawn_marker.global_position
+
 	# Create player based on selected class
 	match GameManager.selected_class:
 		GameManager.PlayerClass.WARRIOR:
@@ -61,11 +86,35 @@ func _spawn_player() -> void:
 
 	if player:
 		entities.add_child(player)
-		player.global_position = Vector3(0, 0.5, 0)
+		player.global_position = spawn_pos
 
-		# Create and setup inventory
-		player_inventory = Inventory.new()
-		player_inventory.give_starter_items(GameManager.get_class_name_string())
+		# Register player with GameManager for enemy targeting
+		GameManager.register_player(player)
+
+		# Handle inventory - check if we already have one from previous scene
+		if GameManager.inventory:
+			player_inventory = GameManager.inventory
+		else:
+			# Create new inventory
+			player_inventory = Inventory.new()
+			GameManager.inventory = player_inventory
+
+		# Check if we're loading a save
+		if SaveManager.has_pending_load():
+			# Apply saved player data
+			SaveManager.apply_player_data(player)
+			# Apply saved inventory data
+			SaveManager.apply_inventory_data(player_inventory)
+		elif SaveManager.has_scene_transition_data():
+			# Restore state from scene transition
+			SaveManager.apply_scene_transition_data(player)
+		else:
+			# New game - give starter items
+			player_inventory.give_starter_items(GameManager.get_class_name_string())
+
+		# Start first quest for new players
+		if not QuestManager.is_quest_completed("tutorial_combat") and not QuestManager.is_quest_active("tutorial_combat"):
+			QuestManager.start_quest("tutorial_combat")
 
 
 func _create_player_instance(p_class: String) -> Player:
@@ -215,19 +264,201 @@ func _setup_hud() -> void:
 		push_warning("Inventory UI scene not found at: " + inventory_ui_path)
 
 
+func _setup_life_skill_uis() -> void:
+	# Create and add all life skill UIs to the UI layer
+	# These are hidden by default and shown when interacting with stations
+
+	# Fishing minigame
+	fishing_minigame = FishingMinigame.new()
+	fishing_minigame.visible = false
+	ui_layer.add_child(fishing_minigame)
+
+	# Mining minigame
+	mining_minigame = MiningMinigame.new()
+	mining_minigame.visible = false
+	ui_layer.add_child(mining_minigame)
+
+	# Chopping minigame
+	chopping_minigame = ChoppingMinigame.new()
+	chopping_minigame.visible = false
+	ui_layer.add_child(chopping_minigame)
+
+	# Cooking UI
+	cooking_ui = CookingUI.new()
+	cooking_ui.visible = false
+	ui_layer.add_child(cooking_ui)
+
+	# Smelting UI
+	smelting_ui = SmeltingUI.new()
+	smelting_ui.visible = false
+	ui_layer.add_child(smelting_ui)
+
+	# Anvil UI
+	anvil_ui = AnvilUI.new()
+	anvil_ui.visible = false
+	ui_layer.add_child(anvil_ui)
+
+	# Crafting UI
+	crafting_ui = CraftingUI.new()
+	crafting_ui.visible = false
+	ui_layer.add_child(crafting_ui)
+
+
+func _spawn_life_skill_stations() -> void:
+	# Spawn test life skill stations in the world
+
+	# Fishing spot - near a "water" area
+	var fishing_spot := FishingSpot.new()
+	fishing_spot.global_position = Vector3(15, 0, 10)
+	fishing_spot.minigame_ui = fishing_minigame
+	fishing_spot.inventory = player_inventory
+	world.add_child(fishing_spot)
+	life_skill_stations.append(fishing_spot)
+
+	# Mine nodes - scattered around rocky area
+	for i in 3:
+		var mine := MineNode.new()
+		mine.ore_type = ["copper", "iron", "gold"][i]
+		mine.global_position = Vector3(-15 + i * 5, 0, -15)
+		mine.minigame_ui = mining_minigame
+		mine.inventory = player_inventory
+		world.add_child(mine)
+		life_skill_stations.append(mine)
+
+	# Tree nodes - forest area
+	for i in 4:
+		var tree := TreeNode.new()
+		tree.wood_type = ["oak", "oak", "birch", "mahogany"][i]
+		tree.global_position = Vector3(20 + randf_range(-5, 5), 0, -10 + i * 5)
+		tree.minigame_ui = chopping_minigame
+		tree.inventory = player_inventory
+		world.add_child(tree)
+		life_skill_stations.append(tree)
+
+	# Camp area stations - crafting hub
+	var camp_center := Vector3(-20, 0, 15)
+
+	# Campfire for cooking
+	var campfire := Campfire.new()
+	campfire.global_position = camp_center
+	campfire.minigame_ui = cooking_ui
+	campfire.inventory = player_inventory
+	world.add_child(campfire)
+	life_skill_stations.append(campfire)
+
+	# Furnace for smelting
+	var furnace := Furnace.new()
+	furnace.global_position = camp_center + Vector3(4, 0, 0)
+	furnace.minigame_ui = smelting_ui
+	furnace.inventory = player_inventory
+	world.add_child(furnace)
+	life_skill_stations.append(furnace)
+
+	# Anvil for forging
+	var anvil := AnvilStation.new()
+	anvil.global_position = camp_center + Vector3(4, 0, 3)
+	anvil.minigame_ui = anvil_ui
+	anvil.inventory = player_inventory
+	world.add_child(anvil)
+	life_skill_stations.append(anvil)
+
+	# Crafting bench for woodworking
+	var bench := CraftingBench.new()
+	bench.global_position = camp_center + Vector3(-3, 0, 2)
+	bench.minigame_ui = crafting_ui
+	bench.inventory = player_inventory
+	world.add_child(bench)
+	life_skill_stations.append(bench)
+
+
 func _spawn_test_enemies() -> void:
-	# Spawn some test enemies
-	for i in 5:
-		var enemy := _create_test_enemy()
-		entities.add_child(enemy)
-		enemy.global_position = Vector3(
+	# Spawn a mix of enemy types
+	var enemy_scenes: Array[String] = [
+		"res://scenes/enemies/skeleton_minion.tscn",
+		"res://scenes/enemies/skeleton_warrior.tscn",
+		"res://scenes/enemies/skeleton_mage.tscn",
+		"res://scenes/enemies/skeleton_rogue.tscn",
+	]
+
+	# Spawn 3 minions
+	for i in 3:
+		_spawn_enemy_at_position(enemy_scenes[0], Vector3(
+			randf_range(-15, 15),
+			0.5,
+			randf_range(-15, 15)
+		))
+
+	# Spawn 2 warriors
+	for i in 2:
+		_spawn_enemy_at_position(enemy_scenes[1], Vector3(
 			randf_range(-20, 20),
 			0.5,
 			randf_range(-20, 20)
-		)
+		))
+
+	# Spawn 1 mage
+	_spawn_enemy_at_position(enemy_scenes[2], Vector3(
+		randf_range(-25, 25),
+		0.5,
+		randf_range(-25, 25)
+	))
+
+	# Spawn 1 rogue
+	_spawn_enemy_at_position(enemy_scenes[3], Vector3(
+		randf_range(-20, 20),
+		0.5,
+		randf_range(-20, 20)
+	))
 
 
-func _create_test_enemy() -> EnemyBase:
+func _spawn_enemy_at_position(scene_path: String, pos: Vector3) -> void:
+	var enemy: EnemyBase = null
+
+	if ResourceLoader.exists(scene_path):
+		var scene: PackedScene = load(scene_path)
+		enemy = scene.instantiate()
+	else:
+		# Fallback to creating a basic enemy programmatically
+		enemy = _create_fallback_enemy()
+
+	if enemy:
+		# Add health bar BEFORE adding to scene tree so _ready() can find it
+		if not enemy.has_node("HealthBar3D"):
+			var health_bar := HealthBar3D.new()
+			health_bar.name = "HealthBar3D"
+			health_bar.position = Vector3(0, 2.2, 0)
+			health_bar.bar_width = 1.2
+			health_bar.max_value = enemy.max_health if "max_health" in enemy else 100
+			health_bar.current_value = health_bar.max_value
+			enemy.add_child(health_bar)
+
+		entities.add_child(enemy)
+		enemy.global_position = pos
+
+
+func spawn_boss() -> void:
+	## Spawn a skeleton boss enemy. Call this for boss encounters.
+	var boss_path := "res://scenes/enemies/skeleton_boss.tscn"
+	if ResourceLoader.exists(boss_path):
+		var boss_scene: PackedScene = load(boss_path)
+		var boss: EnemyBase = boss_scene.instantiate()
+
+		# Add health bar BEFORE adding to scene tree
+		var health_bar := HealthBar3D.new()
+		health_bar.name = "HealthBar3D"
+		health_bar.position = Vector3(0, 4.5, 0)
+		health_bar.bar_width = 2.5
+		health_bar.max_value = boss.max_health
+		health_bar.current_value = boss.max_health
+		boss.add_child(health_bar)
+
+		entities.add_child(boss)
+		boss.global_position = Vector3(0, 0.5, -30)
+
+		EventBus.boss_spawned.emit(boss)
+
+
+func _create_fallback_enemy() -> EnemyBase:
 	var enemy_node := CharacterBody3D.new()
 
 	# Add collision shape
@@ -245,63 +476,32 @@ func _create_test_enemy() -> EnemyBase:
 	model.name = "Model"
 	enemy_node.add_child(model)
 
-	# Variables for animation setup
-	var anim_player: AnimationPlayer = null
-	var skeleton_model: Node3D = null
+	# Fallback to red capsule
+	var mesh_instance := MeshInstance3D.new()
+	var capsule_mesh := CapsuleMesh.new()
+	capsule_mesh.radius = 0.4
+	capsule_mesh.height = 1.6
+	mesh_instance.mesh = capsule_mesh
+	mesh_instance.position.y = 0.8
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.8, 0.2, 0.2)
+	mesh_instance.material_override = material
+	model.add_child(mesh_instance)
 
-	# Load skeleton model (random type)
-	var skeleton_types := [
-		"res://assets/kaykit/characters/skeletons/Skeleton_Minion.glb",
-		"res://assets/kaykit/characters/skeletons/Skeleton_Warrior.glb",
-		"res://assets/kaykit/characters/skeletons/Skeleton_Rogue.glb",
-		"res://assets/kaykit/characters/skeletons/Skeleton_Mage.glb"
-	]
-	var model_path: String = skeleton_types[randi() % skeleton_types.size()]
-
-	if ResourceLoader.exists(model_path):
-		var skeleton_scene: PackedScene = load(model_path)
-		skeleton_model = skeleton_scene.instantiate()
-		skeleton_model.name = "SkeletonMesh"
-		model.add_child(skeleton_model)
-
-		# Look for existing AnimationPlayer in the model
-		anim_player = _find_animation_player(skeleton_model)
-	else:
-		# Fallback to red capsule
-		var mesh_instance := MeshInstance3D.new()
-		var capsule_mesh := CapsuleMesh.new()
-		capsule_mesh.radius = 0.4
-		capsule_mesh.height = 1.6
-		mesh_instance.mesh = capsule_mesh
-		mesh_instance.position.y = 0.8
-		var material := StandardMaterial3D.new()
-		material.albedo_color = Color(0.8, 0.2, 0.2)
-		mesh_instance.material_override = material
-		model.add_child(mesh_instance)
-
-	# Create AnimationPlayer if model didn't have one
-	if not anim_player:
-		anim_player = AnimationPlayer.new()
-		anim_player.name = "AnimationPlayer"
-		# Add to skeleton model so animation paths resolve correctly
-		if skeleton_model:
-			skeleton_model.add_child(anim_player)
-		else:
-			enemy_node.add_child(anim_player)
+	# Add AnimationPlayer
+	var anim_player := AnimationPlayer.new()
+	anim_player.name = "AnimationPlayer"
+	enemy_node.add_child(anim_player)
 
 	# Add AnimationController
 	var anim_controller := AnimationController.new()
 	anim_controller.name = "AnimationController"
 	enemy_node.add_child(anim_controller)
 
-	# Add health bar
-	var health_bar := HealthBar3D.new()
-	health_bar.name = "HealthBar3D"
-	health_bar.position = Vector3(0, 2.2, 0)
-	health_bar.bar_width = 1.2
-	health_bar.max_value = 100
-	health_bar.current_value = 100
-	enemy_node.add_child(health_bar)
+	# Add NavigationAgent3D for pathfinding
+	var nav_agent := NavigationAgent3D.new()
+	nav_agent.name = "NavigationAgent3D"
+	enemy_node.add_child(nav_agent)
 
 	# Attach enemy script
 	enemy_node.set_script(load("res://scenes/enemies/enemy_base.gd"))
